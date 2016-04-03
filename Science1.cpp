@@ -1,9 +1,8 @@
-// Science1.cpp: определяет точку входа для консольного приложения.
+// Science1.cpp: РѕРїСЂРµРґРµР»СЏРµС‚ С‚РѕС‡РєСѓ РІС…РѕРґР° РґР»СЏ РєРѕРЅСЃРѕР»СЊРЅРѕРіРѕ РїСЂРёР»РѕР¶РµРЅРёСЏ.
 //
 
 #define _USE_MATH_DEFINES
 #define DISABLE_OPENCV_24_COMPATIBILITY
-#include "stdafx.h"
 #include "opencv\cv.h"
 #include "opencv\cv.hpp"
 #include "opencv2\xfeatures2d\nonfree.hpp"
@@ -278,7 +277,7 @@ Mat Ransac(std::vector<Point2f> p1,std::vector<Point2f> p2,double thresh,double 
 
 #endif
 
-Mat mergeImages(Mat im1,Mat im2)	//склейка изображений
+Mat mergeImages(Mat im1,Mat im2)	//СЃРєР»РµР№РєР° РёР·РѕР±СЂР°Р¶РµРЅРёР№
 {
 	Mat res(im1.size(),CV_8UC1);
 	unsigned char* data1=im1.data,
@@ -321,7 +320,7 @@ Point operator *(Mat m,Point p)
 void findImage(Mat map,Mat templ)
 {
 	Mat mapgx,mapgy,tempgx,tempgy;   
-	Sobel(map,mapgx,CV_16S,1,0,5); //вычисление градиента шаблона и карты
+	Sobel(map,mapgx,CV_16S,1,0,5); //РІС‹С‡РёСЃР»РµРЅРёРµ РіСЂР°РґРёРµРЅС‚Р° С€Р°Р±Р»РѕРЅР° Рё РєР°СЂС‚С‹
 	Sobel(map,mapgy,CV_16S,0,1,5);
 	Sobel(templ,tempgx,CV_16S,1,0);
 	Sobel(templ,tempgy,CV_16S,0,1);
@@ -341,12 +340,12 @@ void findImage(Mat map,Mat templ)
 					double ang1=atan2(v1y,v1x);
 				for(int x=0;x<templ.rows;x++)
 					for(int y=0;y<templ.cols;y++)
-						if(*At((&templ),x,y)==255)   //перебираем все возможные варианты соответствия (i,j)-> (x,y)
+						if(*At((&templ),x,y)==255)   //РїРµСЂРµР±РёСЂР°РµРј РІСЃРµ РІРѕР·РјРѕР¶РЅС‹Рµ РІР°СЂРёР°РЅС‚С‹ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёСЏ (i,j)-> (x,y)
 						{
 							double v2x=*At((&tempgx),x,y);
 							double v2y=*At((&tempgy),x,y);
 							double ang2=atan2(v2y,v2x);
-							double ang[2]={ang1-ang2,ang1-ang2+M_PI};//  считаем,что угол поворота это угол между градиентами
+							double ang[2]={ang1-ang2,ang1-ang2+M_PI};//  СЃС‡РёС‚Р°РµРј,С‡С‚Рѕ СѓРіРѕР» РїРѕРІРѕСЂРѕС‚Р° СЌС‚Рѕ СѓРіРѕР» РјРµР¶РґСѓ РіСЂР°РґРёРµРЅС‚Р°РјРё
 							//double ang[72];
 							//for(int k=0;k<72;k++)
 							//	ang[k]=k*M_PI/36;
@@ -357,18 +356,18 @@ void findImage(Mat map,Mat templ)
 									ang[k]+=2*M_PI;
 								while (ang[k]>=2*M_PI)
 									ang[k]-=2*M_PI;
-							for(double s=s0;s<=s1;s+=0.1)  //для разных масштабов вычисляем вектора переноса
+							for(double s=s0;s<=s1;s+=0.1)  //РґР»СЏ СЂР°Р·РЅС‹С… РјР°СЃС€С‚Р°Р±РѕРІ РІС‹С‡РёСЃР»СЏРµРј РІРµРєС‚РѕСЂР° РїРµСЂРµРЅРѕСЃР°
 							{
 								double a=s*cos(ang[k]),b=s*sin(ang[k]);
 								double xx=i-a*x-b*y;
 								double yy=j+b*x-a*y;
 								if(xx>=0&&yy>=0&&xx<map.rows&&yy<map.cols)
 								{
-									int thbin=int(ang[k]*180/(M_PI*dth));  //получили 4 параметра,однозначно определяющие евклидовое преобразование
+									int thbin=int(ang[k]*180/(M_PI*dth));  //РїРѕР»СѓС‡РёР»Рё 4 РїР°СЂР°РјРµС‚СЂР°,РѕРґРЅРѕР·РЅР°С‡РЅРѕ РѕРїСЂРµРґРµР»СЏСЋС‰РёРµ РµРІРєР»РёРґРѕРІРѕРµ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРµ
 									int sbin=int((s-s0)/ds);
 									int xbin=(xx/dsp);
 									int ybin=(yy/dsp);
-									short* p=(short*)At4((&accum),(int)(xx/dsp),(int)(yy/dsp),int((s-s0)/ds),k);//голосуем за него
+									short* p=(short*)At4((&accum),(int)(xx/dsp),(int)(yy/dsp),int((s-s0)/ds),k);//РіРѕР»РѕСЃСѓРµРј Р·Р° РЅРµРіРѕ
 								(*p)++;
 								}
 							}
@@ -378,7 +377,7 @@ void findImage(Mat map,Mat templ)
 			double minval,maxval;
  int id_min[4] = { 0, 0, 0, 0};
              int id_max[4] = { 0, 0, 0, 0};
-             minMaxIdx(accum, &minval, &maxval, id_min, id_max);  //находим то,за которое  больше голосовали
+             minMaxIdx(accum, &minval, &maxval, id_min, id_max);  //РЅР°С…РѕРґРёРј С‚Рѕ,Р·Р° РєРѕС‚РѕСЂРѕРµ  Р±РѕР»СЊС€Рµ РіРѕР»РѕСЃРѕРІР°Р»Рё
 			 double ss=s0+ds*id_max[2];
 			 double x0=id_max[0]*dsp;
 			 double y0=id_max[1]*dsp;
@@ -449,7 +448,7 @@ int main()
 
 #if VIDEOEGDE
 
-	Mat mapegdes;   //получение контуров с помощью канни
+	Mat mapegdes;   //РїРѕР»СѓС‡РµРЅРёРµ РєРѕРЅС‚СѓСЂРѕРІ СЃ РїРѕРјРѕС‰СЊСЋ РєР°РЅРЅРё
 	std::vector<std::vector<Point>> mcontours;
 	std::vector<std::vector<Point>> pcontours;
 	cv::Canny(map,mapegdes,90,220);
@@ -489,7 +488,7 @@ int main()
 
 		 Mat egdes;
 		 cv::Canny(mini,egdes,55,135);  
-		 findImage(roads,egdes);  //пытаемся найти соотвествие между дорогами и контурами на видео
+		 findImage(roads,egdes);  //РїС‹С‚Р°РµРјСЃСЏ РЅР°Р№С‚Рё СЃРѕРѕС‚РІРµСЃС‚РІРёРµ РјРµР¶РґСѓ РґРѕСЂРѕРіР°РјРё Рё РєРѕРЅС‚СѓСЂР°РјРё РЅР° РІРёРґРµРѕ
 		 //findContours(egdes,pcontours,cv::RetrievalModes::RETR_LIST,ContourApproximationModes::CHAIN_APPROX_SIMPLE);
 		 //Mat pconim(inp[n].size(),CV_8SC3);
 		 //for(int i=0;i<pcontours.size();i++)
@@ -521,11 +520,11 @@ int main()
 		 if(points[0].size()>0&&points[1].size()>0)
 		 {
 #if (SUFRMATCH)
-			 matcher.match(descriptors[(n+1)%2],descriptors[n],matches[0]);//находим соответствия из 1 во 2 изображение и наоборот
+			 matcher.match(descriptors[(n+1)%2],descriptors[n],matches[0]);//РЅР°С…РѕРґРёРј СЃРѕРѕС‚РІРµС‚СЃС‚РІРёСЏ РёР· 1 РІРѕ 2 РёР·РѕР±СЂР°Р¶РµРЅРёРµ Рё РЅР°РѕР±РѕСЂРѕС‚
 			 matcher.match(descriptors[n],descriptors[(n+1)%2],matches[1]);
 			 std::vector<Point2d> flow;
 			 flow.clear();
-			 double mn[2]={1e06,1e06}; //считаем хорошими те которые есть в обоих списках и расстояние между котрыми <3* мин расстояние
+			 double mn[2]={1e06,1e06}; //СЃС‡РёС‚Р°РµРј С…РѕСЂРѕС€РёРјРё С‚Рµ РєРѕС‚РѕСЂС‹Рµ РµСЃС‚СЊ РІ РѕР±РѕРёС… СЃРїРёСЃРєР°С… Рё СЂР°СЃСЃС‚РѕСЏРЅРёРµ РјРµР¶РґСѓ РєРѕС‚СЂС‹РјРё <3* РјРёРЅ СЂР°СЃСЃС‚РѕСЏРЅРёРµ
 				 for(int j=0;j<2;j++)
 					 for(int i=0;i<matches[j].size();i++)
 				 mn[j]=std::min(double(matches[j][i].distance),mn[j]);
@@ -554,10 +553,10 @@ int main()
 				 flow.push_back(p2[i]-p1[i]);
 
 			 }
-#if DISPARITY //вычисление карты смещения
+#if DISPARITY //РІС‹С‡РёСЃР»РµРЅРёРµ РєР°СЂС‚С‹ СЃРјРµС‰РµРЅРёСЏ
 			 Mat R1,R2,P1,P2;
-			 //вычисление ректификацирующего преобразования
-	#if RECTIFY_UNCAL //instr - полученна калибровкой, сама калибровка в Science2.cpp
+			 //РІС‹С‡РёСЃР»РµРЅРёРµ СЂРµРєС‚РёС„РёРєР°С†РёСЂСѓСЋС‰РµРіРѕ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёСЏ
+	#if RECTIFY_UNCAL //instr - РїРѕР»СѓС‡РµРЅРЅР° РєР°Р»РёР±СЂРѕРІРєРѕР№, СЃР°РјР° РєР°Р»РёР±СЂРѕРІРєР° РІ Science2.cpp
 			 Mat F=findFundamentalMat(p1,p2);
 			 Mat H1,H2;
 			 Mat inst=Mat(Matx33d(2337.983953926237, -0.09271596967581647, 562.8852861944566,0, 2327.653717544988, -63.22961930103139,0, 0, 1));
@@ -582,7 +581,7 @@ int main()
 			 stereoRectify(inst,noArray(),inst,noArray(),Size(inp[n].cols,inp[n].rows),R,t,R1,R2,P1,P2,Q,1024,0);
 			 std::cout<<R1<<"\n"<<R2<<"\n"<<P1<<"\n"<<P2<<"\n"<<Q<<"\n";
 #endif
-			 Mat map11,map12,map21,map22; //ректификация
+			 Mat map11,map12,map21,map22; //СЂРµРєС‚РёС„РёРєР°С†РёСЏ
 			 initUndistortRectifyMap(inst,noArray(),R1,P1,Size(inp[n].cols,inp[n].rows),CV_32F,map11,map12);
 			 initUndistortRectifyMap(inst,noArray(),R2,P2,Size(inp[n].cols,inp[n].rows),CV_32F,map21,map22);
 			 Mat temp1,temp2;
@@ -590,7 +589,7 @@ int main()
 			 remap(inp[1-n],temp2,map21,map22,InterpolationFlags::INTER_CUBIC);
 			 imshow("im1",temp1);
 			 imshow("im2",temp2);
-			 //построение карты глубины
+			 //РїРѕСЃС‚СЂРѕРµРЅРёРµ РєР°СЂС‚С‹ РіР»СѓР±РёРЅС‹
 			 auto bm=StereoSGBM::create(16,256,11);
 			 Mat disp,disp8;
 			 bm->compute(temp2,temp1,disp);
@@ -600,7 +599,7 @@ int main()
 #endif
 #endif
 #if CORNFLOW
-			 Mat flows; //попыткм получить карту глубины для случая перемещения используя оптический поток
+			 Mat flows; //РїРѕРїС‹С‚РєРј РїРѕР»СѓС‡РёС‚СЊ РєР°СЂС‚Сѓ РіР»СѓР±РёРЅС‹ РґР»СЏ СЃР»СѓС‡Р°СЏ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёСЃРїРѕР»СЊР·СѓСЏ РѕРїС‚РёС‡РµСЃРєРёР№ РїРѕС‚РѕРє
 			 calcOpticalFlowFarneback(inp[n],inp[1-n],flows,0.5,3,20,2,7,1.6,0);
 			 Mat dist(inp[n].rows,inp[n].cols,CV_8U);
 			// std::cout<<flows<<"\n";
@@ -623,13 +622,13 @@ int main()
 			 imshow("dist",dist);
 			 imshow("mas",mas);
 #endif
-#if HOMO //склейка карты из видео
+#if HOMO //СЃРєР»РµР№РєР° РєР°СЂС‚С‹ РёР· РІРёРґРµРѕ
 			 if(p1.size()>4)
 			 {
 			 Mat H2=findHomography(p2,p1,mask,RANSAC,2);
 			 for(int i=0;i<3;i++)
 				 for(int j=0;j<3;j++)
-					 H2.at<double>(i,j)=int(H2.at<double>(i,j)*1e04)*1e-04; //округление
+					 H2.at<double>(i,j)=int(H2.at<double>(i,j)*1e04)*1e-04; //РѕРєСЂСѓРіР»РµРЅРёРµ
 			 double det=determinant(H2);
 			 //Matx33d sca(1/sqrt(det),0,0,0,1/sqrt(det),0,0,0,1);
 			//H2*=Mat();
@@ -640,7 +639,7 @@ int main()
 					 {
 						 herr+=Homodiff(p2[i],p1[i],H2);
 					 }
-					 herr=sqrt(herr)/p2.size(); //вычислили средную ошибку в пикслелях при применении гомографии
+					 herr=sqrt(herr)/p2.size(); //РІС‹С‡РёСЃР»РёР»Рё СЃСЂРµРґРЅСѓСЋ РѕС€РёР±РєСѓ РІ РїРёРєСЃР»РµР»СЏС… РїСЂРё РїСЂРёРјРµРЅРµРЅРёРё РіРѕРјРѕРіСЂР°С„РёРё
 					 std::cout<<herr<<"\n";
 					 if(herr<2)
 					 {
@@ -656,7 +655,7 @@ int main()
 		max(MyMap.rows,max(max(p11.y,p12.y),max(p21.y,p22.y))));*/
 	Mat piece1;
 	Mat im1=inp[n].clone();
-	warpPerspective(im1,piece1,Hom,Size(4000,4100));//получаем кусок,который нужно приклеить
+	warpPerspective(im1,piece1,Hom,Size(4000,4100));//РїРѕР»СѓС‡Р°РµРј РєСѓСЃРѕРє,РєРѕС‚РѕСЂС‹Р№ РЅСѓР¶РЅРѕ РїСЂРёРєР»РµРёС‚СЊ
 	MyMap=mergeImages(MyMap,piece1);
 
 	std::string name="piece";
@@ -667,7 +666,7 @@ int main()
 					 }
 					 else
 					 {
-						 frame[n]=frame[1-n];// если матрица гомографии получилась плохая,пропускаем кадр
+						 frame[n]=frame[1-n];// РµСЃР»Рё РјР°С‚СЂРёС†Р° РіРѕРјРѕРіСЂР°С„РёРё РїРѕР»СѓС‡РёР»Р°СЃСЊ РїР»РѕС…Р°СЏ,РїСЂРѕРїСѓСЃРєР°РµРј РєР°РґСЂ
 					 }
 			 }
 			 else
@@ -676,7 +675,7 @@ int main()
 			 }
 #endif
 #if AFFINEEST
-			 if(p1.size()>3) //вычисление преобразования между кадрами как афинного (получилось немного хуже чем гомография)
+			 if(p1.size()>3) //РІС‹С‡РёСЃР»РµРЅРёРµ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёСЏ РјРµР¶РґСѓ РєР°РґСЂР°РјРё РєР°Рє Р°С„РёРЅРЅРѕРіРѕ (РїРѕР»СѓС‡РёР»РѕСЃСЊ РЅРµРјРЅРѕРіРѕ С…СѓР¶Рµ С‡РµРј РіРѕРјРѕРіСЂР°С„РёСЏ)
 			 {
 			 Mat trf=estimateRigidTransform(p1,p2,0);
 			 Mat eim;
@@ -697,9 +696,9 @@ int main()
 #endif
 
 #if ROTAUTOCAB
-			 Homos.push_back(findHomography(p2,p1,RANSAC,0.5)); //калибровка камеры при условии,что она неподвижна
-			 Mat intern;                                       //думал,что получится применить там,где коптер разворачивается,
-			 //                                                 но результаты были не очень
+			 Homos.push_back(findHomography(p2,p1,RANSAC,0.5)); //РєР°Р»РёР±СЂРѕРІРєР° РєР°РјРµСЂС‹ РїСЂРё СѓСЃР»РѕРІРёРё,С‡С‚Рѕ РѕРЅР° РЅРµРїРѕРґРІРёР¶РЅР°
+			 Mat intern;                                       //РґСѓРјР°Р»,С‡С‚Рѕ РїРѕР»СѓС‡РёС‚СЃСЏ РїСЂРёРјРµРЅРёС‚СЊ С‚Р°Рј,РіРґРµ РєРѕРїС‚РµСЂ СЂР°Р·РІРѕСЂР°С‡РёРІР°РµС‚СЃСЏ,
+			 //                                                 РЅРѕ СЂРµР·СѓР»СЊС‚Р°С‚С‹ Р±С‹Р»Рё РЅРµ РѕС‡РµРЅСЊ
 			 if(Homos.size()>=3)
 			 {
 			 cv::detail::calibrateRotatingCamera(Homos,intern);
