@@ -714,7 +714,7 @@ int main()
 		 }
 		 else
 		 {
-#if SURFHOMO
+#if HOMO
 			 MyMap=inp[n];
 			 Mat oup=inp[n];
 			// pyrDown(inp[n],oup);
