@@ -19,6 +19,7 @@
 #include <queue>
 #include <map>
 #include "FindRoads.h"
+#include "genehough.h"
 
 #pragma comment(linker, "/STACK:16777216")
 
@@ -33,7 +34,7 @@ using namespace cv::detail;
 #define ROTAUTOCAB 0
 #define RECTIFY_UNCAL 0
 #define RECTIFY_CAL 1
-#define DISPARITY 1
+#define DISPARITY 0
 #define PHASECOR 0
 
 #define At(M,i,j) (M->data+(i)*M->step[0]+(j)*M->step[1])
@@ -391,19 +392,76 @@ void findImage(Mat map,Mat templ)
 		//	 warpAffine(templ,sh,tr,Size(map.cols,map.rows));
 			 imshow("finding",sh);
 }
+
+
+void findGoodMatches(BFMatcher& matcher,UMat& descriptors1,UMat& descriptors2,std::vector<cv::KeyPoint>& points1,
+					 std::vector<cv::KeyPoint>& points2,std::vector<Point2f>& p1,std::vector<Point2f>& p2,std::vector<cv::DMatch> goodmatches)
+{
+	std::vector<cv::DMatch> matches[2];
+	 matcher.match(descriptors1,descriptors2,matches[0]);//находим соответствия из 1 во 2 изображение и наоборот
+	 matcher.match(descriptors2,descriptors1,matches[1]);
+			 double mn[2]={1e06,1e06}; //считаем хорошими те которые есть в обоих списках и расстояние между котрыми <3* мин расстояние
+				 for(int j=0;j<2;j++)
+					 for(int i=0;i<matches[j].size();i++)
+				 mn[j]=std::min(double(matches[j][i].distance),mn[j]);
+				 p1.clear();
+				 p2.clear();
+				 goodmatches.clear();
+			 for(int i=0;i<matches[0].size();i++)
+			 {
+				 if(matches[1][matches[0][i].trainIdx].trainIdx==i)
+				if(matches[0][i].distance < 3 *mn[0])
+					if(matches[1][matches[0][i].trainIdx].distance < 3 *mn[1])
+					{
+					    goodmatches.push_back(DMatch(matches[0][i].queryIdx,matches[0][i].trainIdx,0,0.01));
+						p1.push_back(points1[matches[0][i].queryIdx].pt);
+						p2.push_back(points2[matches[0][i].trainIdx].pt);
+					}
+			 }
+}
+
+
+Mat GetGreenMap(Mat* im,int r) //для каждого пикселя считает меру того,насколько зеленого цвета в окрестности больше
+{
+	Mat res(im->rows,im->cols,CV_32F);
+	Mat g=getGaussianKernel(2*r+1,-1);
+	std::cout<<g<<"\n";
+	for(int i=0;i<im->rows;i++)
+		for(int j=0;j<im->cols;j++)
+		{
+		float v=0;
+			for(int x=-r;x<=r;x++)
+				for(int y=-r;y<=r;y++)
+					if(Point(i+x,j+y).inside(Rect_<int>(0,0,im->rows,im->cols)))
+					v+=(*(At(im,i+x,j+y)+1)-max(*At(im,i+x,j+y),*(At(im,x+i,y+j)+2)))/**g.at<double>(x+r)*g.at<double>(y+r)*/;
+			float* pt=(float*)At((&res),i,j);
+			v=max(v,0.0f);
+			*pt=v;
+			//v/=r*r;
+		}
+		normalize(res,res,0,1,CV_MINMAX,CV_32F);
+		return res;
+}
 int main()
 {
 	VideoCapture cap("v.mov");
 	//namedWindow("wind");
+	double deltaT=1500;
+	double deltaTincrease=1.2;
+	double deltaTdecrease=0.7;
+	double mindeltaT=100;
+	int stitchedframes=0;
 	Mat frame[3];
 	Mat inp[3];
+	Stitcher stitcher=Stitcher::createDefault();
 	std::vector<cv::KeyPoint> points[3];
+	std::vector<cv::KeyPoint> mappoints,panopoints;
 	std::vector<cv::DMatch> matches[3];
 	std::vector<DMatch> goodmatches;
 	std::vector<Point2f> p1,p2,pm;
 	std::vector<Point2f> fp1,fp2;
 	std::vector<Mat> Homos;
-	 Mat MyMap;
+	 std::vector<Mat> MyMap;
 	 Mat Move(650,1200,CV_8SC3);
 	 Point pos(400,600);
 	 Mat ori=Mat::eye(3,3,CV_64F);
@@ -413,13 +471,14 @@ int main()
 	 Mat Hom=Mat::eye(3,3,CV_64F);
 	 Hom.at<double>(0,0)=0.5;
 	 Hom.at<double>(1,1)=0.5;
-	  Hom.at<double>(0,2)=3000;
-	 Hom.at<double>(1,2)=3000;
+	  Hom.at<double>(0,2)=100;
+	 Hom.at<double>(1,2)=1500;
 	Mat px(1, 1, CV_64F), pxstr(1, 1, CV_64F);
 	Mat R,t;
 	Mat mask;
 	Mat X;
 	UMat descriptors[3];
+	UMat mapdescr,panodescr;
 	Mat F,H;
 	BFMatcher matcher;
 	Ptr<Feature2D> detector = xfeatures2d::SURF::create();
@@ -431,11 +490,72 @@ int main()
 	Mat map=imread("mapnew2.bmp");
 
 	Mat roads=FindRoads(map);
+	pyrDown(map,map);
+	//pyrDown(map,map);
 	rollingGuidanceFilter(map,map,3,6.3,4.9,5,4);
 	imshow("mapcolor",map);
 	imshow("roads",roads);
+	Mat mapc=map.clone();
 	cvtColor(map,map,CV_RGB2GRAY);
 	//imshow("roads1",out2);
+	detector->detect(map,mappoints);
+	detector->compute(map,mappoints,mapdescr);
+	//auto genhough=createGeneralizedHoughGuil();
+	GeneralizedHoughGuilImpl* genhough=new GeneralizedHoughGuilImpl();
+	genhough->setCannyHighThresh(140);
+	genhough->setCannyLowThresh(60);
+	genhough->setAngleEpsilon(1);
+	genhough->setAngleStep(1);
+	genhough->setAngleThresh(100);
+	genhough->setLevels(360);
+	genhough->setMaxAngle(360);
+	genhough->setMaxScale(30);
+	genhough->setMinAngle(0);
+	genhough->setMinDist(0);
+	genhough->setMinScale(0.1);
+	genhough->setPosThresh(1);
+	genhough->setScaleStep(0.01);
+	genhough->setScaleThresh(3);
+	genhough->setMaxBufferSize(10000);
+#if TESTGENHOUGH
+	genhough->setCannyHighThresh(140);
+	genhough->setCannyLowThresh(60);
+	genhough->setAngleEpsilon(1);
+	genhough->setAngleStep(1);
+	genhough->setAngleThresh(1000);
+	genhough->setLevels(360);
+	genhough->setMaxAngle(360);
+	genhough->setMaxScale(3);
+	genhough->setMinAngle(0);
+	genhough->setMinDist(0);
+	genhough->setMinScale(0.5);
+	genhough->setPosThresh(100);
+	genhough->setScaleStep(0.01);
+	genhough->setScaleThresh(100);
+	genhough->setMaxBufferSize(10000);
+	Mat test1=imread("rect1.bmp");
+	Mat test2=imread("rect2.bmp");
+	cvtColor(test1,test1,CV_RGB2GRAY);
+	cvtColor(test2,test2,CV_RGB2GRAY);
+	genhough->setTemplate(test1,Point(-1,-1));
+	 Mat posi;
+		 Mat votes;
+		 Mat ddx,ddy;
+		pyrDown(map,map);
+	Sobel(test2,ddx,CV_32F,1,0);
+	Sobel(test2,ddy,CV_32F,0,1);
+	Canny(test2,test2,60,140);
+	Canny(test1,test1,60,140);
+	imshow("test2",test2);
+	imshow("test1",test1);
+		 genhough->detect(test2,ddx,ddy,posi,votes);
+		 std::cout<<posi<<"\n";
+#endif
+	/*std::vector<Vec4f> linesmap;
+	HoughLinesP(map,linesmap,4000,M_PI/80,3000,10.0,3.0);
+	for(int i=0;i<linesmap.size();i++)
+		line(imlines,Point2f(linesmap[i][0],linesmap[i][1]),Point2f(linesmap[i][2],linesmap[i][3]),CV_RGB(255,0,0));
+	imshow("mapline",imlines);*/
 #if PHASECOR
 				 Mat hann;
 			 createHanningWindow(hann, Size(map.cols, map.rows), CV_64F);
@@ -447,28 +567,47 @@ int main()
 #endif
 
 #if VIDEOEGDE
-
+Mat green=GetGreenMap(&mapc,2);
+	for(int i=0;i<green.rows;i++)
+		for(int j=0;j<green.cols;j++)
+		{
+			float* pt=green.ptr<float>(i,j);
+			*pt=((*pt<0.27)?(1.0):(0.0));
+		}
+			imshow("green",green);
+		green.convertTo(green,CV_8U);
 	Mat mapegdes;   //получение контуров с помощью канни
+	Mat dx,dy;
+		//pyrDown(map,map);
+		//pyrDown(map,map);
+	Sobel(map,dx,CV_32F,1,0);
+	Sobel(map,dy,CV_32F,0,1);
 	std::vector<std::vector<Point>> mcontours;
 	std::vector<std::vector<Point>> pcontours;
-	cv::Canny(map,mapegdes,90,220);
+	cv::Canny(map,mapegdes,70,210);
+	mapegdes=mapegdes.mul(green); // рассматриваю только незеленые контуры
 	//mapegdes=mapegdes.mul(out);
 	findContours(mapegdes,mcontours,cv::RetrievalModes::RETR_LIST,ContourApproximationModes::CHAIN_APPROX_SIMPLE);
 		 Mat mconim(map.size(),CV_8SC3);
 		 for(int i=0;i<mcontours.size();i++)
 			 if(mcontours[i].size()>20/*&&(mcontours[i][0]-mcontours[i].back()).dot(mcontours[i][0]-mcontours[i].back())>20*/)
 				 drawContours(mconim,mcontours,i,Scalar(rand()%256,rand()%256,rand()%256));
+		 mapegdes=mapegdes(Range(mapegdes.rows/2,mapegdes.rows-1),Range(0,mapegdes.cols/2)); // контуров на карте все равно слишком много,беру пока только часть карты
+		 dx=dx(Range(dx.rows/2,dx.rows-1),Range(0,dx.cols/2));
+		 dy=dy(Range(dy.rows/2,dy.rows-1),Range(0,dy.cols/2));
+
 	imshow("map",mapegdes);
 	imshow("cmap",mconim);
 #endif
 	while(1)
 	{
 		char c= waitKey(500);
+		bool success=0;//удачно ли приклеили кадр к панораме
 		if(c==' ')
 		{
-			std::cout<<inter++<<"\n";
+ 			std::cout<<inter++<<"\n";
 		cap>>frame[n];
-		cap.set(CAP_PROP_POS_MSEC,cap.get(CAP_PROP_POS_MSEC)+1000);
+		//cap.set(CAP_PROP_POS_MSEC,cap.get(CAP_PROP_POS_MSEC)+1000);
 
 			cv::resize(frame[n],frame[n],cv::Size(0,0),0.5,0.5);
 		cv::cvtColor(frame[n],inp[n],CV_RGB2GRAY);
@@ -488,7 +627,12 @@ int main()
 
 		 Mat egdes;
 		 cv::Canny(mini,egdes,55,135);  
-		 findImage(roads,egdes);  //пытаемся найти соотвествие между дорогами и контурами на видео
+		 genhough->setTemplate(mini,Point(-1,-1));
+		 Mat pos;
+		 Mat votes;
+		 genhough->detect(mapegdes,dx,dy,pos,votes);
+		 std::cout<<pos<<"\n"<<votes<<"\n";
+		// findImage(roads,egdes);  //пытаемся найти соотвествие между дорогами и контурами на видео
 		 //findContours(egdes,pcontours,cv::RetrievalModes::RETR_LIST,ContourApproximationModes::CHAIN_APPROX_SIMPLE);
 		 //Mat pconim(inp[n].size(),CV_8SC3);
 		 //for(int i=0;i<pcontours.size();i++)
@@ -623,6 +767,14 @@ int main()
 			 imshow("mas",mas);
 #endif
 #if HOMO //склейка карты из видео
+			 /*std::vector<Mat> stim;
+			 stim.push_back(frame[n]);
+			 stim.push_back(frame[1-n]);
+			 Mat pan0;
+			 Stitcher::Status status=stitcher.stitch(stim,pan0);
+			 if(status==Stitcher::Status::OK)
+				 imshow("stitch",pan0);*/
+			// std::cin.get();
 			 if(p1.size()>4)
 			 {
 			 Mat H2=findHomography(p2,p1,mask,RANSAC,2);
@@ -641,7 +793,7 @@ int main()
 					 }
 					 herr=sqrt(herr)/p2.size(); //вычислили средную ошибку в пикслелях при применении гомографии
 					 std::cout<<herr<<"\n";
-					 if(herr<2)
+					 if(herr<0.7)
 					 {
 						  Hom=Hom*H2;
 						  std::cout<<determinant(H2)<<"\n";
@@ -655,23 +807,20 @@ int main()
 		max(MyMap.rows,max(max(p11.y,p12.y),max(p21.y,p22.y))));*/
 	Mat piece1;
 	Mat im1=inp[n].clone();
-	warpPerspective(im1,piece1,Hom,Size(4000,4100));//получаем кусок,который нужно приклеить
-	MyMap=mergeImages(MyMap,piece1);
-
-	std::string name="piece";
-	name+=(char)'0'+inter;
-
+	warpPerspective(im1,piece1,Hom,Size(1000,2100),InterpolationFlags::WARP_FILL_OUTLIERS,BorderTypes::BORDER_CONSTANT);//получаем кусок,который нужно приклеить
+	MyMap[MyMap.size()-1]=mergeImages(MyMap.back(),piece1);
+	success=1; 
 	imshow("down",piece1);
-	imshow("res",MyMap);
+	imshow("res",MyMap.back());
 					 }
 					 else
 					 {
-						 frame[n]=frame[1-n];// если матрица гомографии получилась плохая,пропускаем кадр
+						 //frame[n]=frame[1-n];// если матрица гомографии получилась плохая,пропускаем кадр
 					 }
 			 }
 			 else
 			 {
-				 frame[n]=frame[1-n];
+				// frame[n]=frame[1-n];
 			 }
 #endif
 #if AFFINEEST
@@ -715,14 +864,57 @@ int main()
 		 else
 		 {
 #if HOMO
-			 MyMap=inp[n];
+			 //MyMap=inp[n];
 			 Mat oup=inp[n];
 			// pyrDown(inp[n],oup);
-			 warpPerspective(oup,MyMap,Hom,Size(4000,4100));
-			 imshow("piece0",MyMap);
+			 MyMap.push_back(Mat());
+			 warpPerspective(oup,MyMap.back(),Hom,Size(1000,2100));
+			 imshow("piece0",MyMap.back());
 #endif
-			 }
+			  cap.set(CAP_PROP_POS_MSEC,cap.get(CAP_PROP_POS_MSEC)+deltaT);
 		 n=(n+1)%2;
+			 }
+			 if(success)// если хорошо склеилось,увеличиваю временнной промежуток между след кадрами
+			 {
+				 deltaT*=deltaTincrease;
+				 cap.set(CAP_PROP_POS_MSEC,cap.get(CAP_PROP_POS_MSEC)+deltaT);
+				 stitchedframes++;
+		 n=(n+1)%2;
+			 }
+			 else
+				 if(p1.size()&&p2.size())
+			 {  //беру новый кадр вместо старого пораньше
+				 cap.set(CAP_PROP_POS_MSEC,cap.get(CAP_PROP_POS_MSEC)-deltaT+deltaT*deltaTdecrease);
+				 deltaT*=deltaTdecrease;
+				 if(deltaT<mindeltaT||stitchedframes>50)
+				 {
+					 Mat pano; //пытаюсь сопоставить панораму и карту с помощью точечных соответствий
+					 resize(MyMap.back(),pano,Size(map.cols,map.rows));
+					 detector->detect(pano,panopoints);
+					 detector->compute(pano,panopoints,panodescr);
+					 std::vector<Point2f> mp,pp;
+					 std::vector<DMatch> goodmatch;
+					 findGoodMatches(matcher,mapdescr,panodescr,mappoints,panopoints,mp,pp,goodmatch);
+					 Mat immm;
+					 drawMatches(map,mappoints,pano,panopoints,goodmatches,immm);
+
+					 imshow("mtcgf",immm);
+
+					 waitKey(10000000);
+
+					 MyMap.push_back(Mat());
+					 Hom.at<double>(0,0)=0.5;
+					 Hom.at<double>(1,1)=0.5;
+					 Hom.at<double>(2,2)=1;
+					 Hom.at<double>(0,1)=0;
+					 Hom.at<double>(1,0)=0;
+					 Hom.at<double>(2,0)=0;
+					 Hom.at<double>(2,1)=0;
+					 warpPerspective(inp[n],MyMap.back(),Hom,Size(4000,4100));
+					 n=1-n;
+				 }
+			 }
+			 std::cout<<"time"<<cap.get(CAP_PROP_POS_MSEC)<<"\n";
 		}
 	} 
 	return 0;
