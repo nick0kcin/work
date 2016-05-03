@@ -1,6 +1,7 @@
+#include "stdafx.h"
+#if _FILE==2
 #define _USE_MATH_DEFINES
 #define DISABLE_OPENCV_24_COMPATIBILITY
-#include "stdafx.h"
 #include "opencv\cv.h"
 #include "opencv\cv.hpp"
 #include "opencv2\xfeatures2d\nonfree.hpp"
@@ -313,3 +314,4 @@ int main() // калибровка
 	}
 	return 0;
 }
+#endif
